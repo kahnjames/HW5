@@ -1,0 +1,178 @@
+# -*- coding: utf-8 -*-
+"""
+Created on 2019-03-22
+
+@author: misken
+"""
+
+import re
+import pandas as pd
+import csv
+
+
+def process_lizcopeland(fn_lizcopeland , fn_csv_out):
+    """
+    Function
+    --------
+    process_lizcopeland
+
+    Use regex to create a file with which includes name of show, time slot, date
+
+    Parameters
+    ----------
+    fn_lizcopeland : str
+        Name of file scraped from WDET
+
+    fn_out : str
+        Name of new, reformatted, file
+
+    Returns
+    -------
+    Nothing returned. Just creates output file.
+
+    Example
+    -------
+    process_lizcopeland('data/LizCopeland.csv' , 'data/LizCopeland_processed.csv')
+
+    Notes
+    -----
+    Every line has 6 columns (5 tabs acting as the delimiters)
+
+    Four line types:
+
+    1 - show title and time slot --> text followed by 5 tabs
+    2 - date --> text followed by 5 tabs
+    3 - header --> a tab followed by 5 tab separated column headers
+    4 - song --> 5 tab separated text values; last field (comment) is often empty
+
+    """
+
+    # regex for line with title, day number and time
+    # Capturing the entire text string (not including the trailing tabs)
+    # Alternate Take with Liz Copeland (Day 1) (12am-1am)
+
+    re_show = re.compile(r'^.*Copeland.*$')
+
+    # regex for date. You can assume dates are between 2003 and 2007
+    # Capturing day of week and date separately
+    # Saturday March 31, 2007
+
+    re_date = re.compile(r'(^\w+day)\s+(.*, \d{4})')
+
+    # regex for column header
+    # Not doing any capturing, just trying to match to find header lines
+
+    re_header = re.compile(r'\tNo.\tArtist\tSong\tAlbum\s\(Label\)\tComment')
+
+    # regex for song
+    # Not doing any capturing, just trying to match to find song lines
+    # I've done this one for you
+
+    re_song = re.compile(r'^.*\t\d+\t.+\t')
+
+    # Initialize counters
+    num_lines = 0
+    num_showtitle_lines_matched = 0
+    num_date_lines_matched = 0
+    num_header_lines_matched = 0
+    num_song_lines_matched = 0
+    num_unmatched_lines = 0
+
+    # Initialize empty list to store output lines
+    songlines = []
+
+    # Initialize string vars to use for the show title and date
+    show_title = ''
+    show_date = ''
+
+    # Open the input file
+    with open(fn_lizcopeland) as f:
+
+        # Loop over the lines in the file
+        for line in f:
+
+            # Update counter of number of lines read
+            num_lines += 1
+
+            # Just strip newline characters (don't want to strip tabs)
+            line = line.rstrip('\n\')
+
+            # Check if each regex matches this line. Only one will match.
+
+            m_show = re.match(re_show, line)
+            m_date = re.match(re_date, line)
+            m_header = re.match(re_header, line)
+            m_song = re.match(re_song, line)
+
+            # Confirm that only one matched using assert (look it up)
+            assert bool(m_show) + bool(m_date) + bool(m_header) + bool(m_song) == 1
+
+            # Figure out what type of line this is
+            if m_show:
+                # it's a show title line
+
+                num_showtitle_lines_matched += 1
+
+                # Get the show title
+                show_title = m_show.group(1)
+
+            elif m_date:
+                # it's a date line
+                num_date_lines_matched += 1
+                show_dayofweek = m_date.group(1)
+                show_date = m_date.group(2)
+
+            elif m_header:
+                # it's a header line
+                num_header_lines_matched += 1
+                headerline = " No.  Artist  Song  Album (label)  Comment"
+
+            elif m_song:
+                # it's a song line
+                num_song_lines_matched += 1
+
+                # Split line on tabs into list
+                song = line.split('\t')
+
+                # Insert the show title and show date at beginning of list
+                song.insert(0, show_date)
+                song.insert(0, show_title)
+
+                # Append this list to our master list of song rows
+                songlines.append(song)
+
+            else:
+                # We really should never get here unless there's a line type we missed
+                print(line)
+                num_unmatched_lines += 1
+
+    # Done processing the file, let's create a list of column names from the headerline
+
+    header = headerline.split('\t')  			# Split headerline on tabs
+    header[0] = 'buy'                           # Update the missing column header for the column containing "buy"
+    header.insert(0, "show_title")              # Insert column name for show title
+    header.insert(1, "show_date")               # Insert column name for show date
+
+    # Create pandas dataframe and export to csv
+
+    songs_df = pd.DataFrame(data = songlines, columns = header)
+    songs_df.to_csv(fn_csv_out, sep='\t', index=false)
+
+
+    # All done, print the various line counts
+    print("Num show lines matched --> {}".format(num_showtitle_lines_matched))
+    print("Num date lines matched --> {}".format(num_date_lines_matched))
+    print("Num song lines matched --> {}".format(num_song_lines_matched))
+    print("Num header lines matched --> {}".format(num_header_lines_matched))
+    print("Num unmatched lines--> {}".format(num_unmatched_lines))
+    print("Total lines read --> {}".format(num_lines))
+
+    num_matched_lines = num_showtitle_lines_matched + num_date_lines_matched + num_song_lines_matched + \
+        num_header_lines_matched
+
+    print("\nNum matched lines--> {}".format(num_matched_lines))
+    print("\nNum matched + unmatched lines--> {}".format(num_matched_lines + num_unmatched_lines))
+
+if __name__ == '__main__':
+    process_lizcopeland('data/LizCopeland.csv' , 'data/LizCopeland_processed.csv')
+
